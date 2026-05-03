@@ -1,0 +1,935 @@
+openapi: 3.0.3
+info:
+  title: Ardodo API
+  version: 0.0.1
+  description: |
+    REST API for the Ardodo reaction trainer backend.
+
+    Authentication uses JWT Bearer tokens returned by `/api/auth/login` and `/api/auth/register`.
+    Device websocket connection is available at `/ws/devices?deviceId={deviceId}&token={deviceToken}`.
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+tags:
+  - name: Auth
+  - name: Me
+  - name: Devices
+  - name: Pair Codes
+  - name: Sessions
+  - name: Results
+  - name: WebSocket
+
+paths:
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a player
+      operationId: register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Player registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login a player
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/me:
+    get:
+      tags: [Me]
+      summary: Get current player
+      operationId: getCurrentPlayer
+      responses:
+        '200':
+          description: Current player
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Player'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    patch:
+      tags: [Me]
+      summary: Update current player
+      operationId: updateCurrentPlayer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePlayerRequest'
+      responses:
+        '200':
+          description: Updated player
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Player'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/me/stats:
+    get:
+      tags: [Me]
+      summary: Get current player stats
+      operationId: getCurrentPlayerStats
+      responses:
+        '200':
+          description: Player stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerStatsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/devices/register:
+    post:
+      tags: [Devices]
+      summary: Register a device and receive a device token
+      operationId: registerDevice
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterDeviceRequest'
+      responses:
+        '200':
+          description: Registered device with plaintext device token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterDeviceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/devices/me:
+    get:
+      tags: [Devices]
+      summary: List current player's paired devices
+      operationId: getMyDevices
+      responses:
+        '200':
+          description: Devices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DeviceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/devices/online:
+    get:
+      tags: [Devices]
+      summary: List all online devices
+      operationId: getOnlineDevices
+      responses:
+        '200':
+          description: Online devices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DeviceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/devices/{id}:
+    get:
+      tags: [Devices]
+      summary: Get current player's device
+      operationId: getDevice
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200':
+          description: Device
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Devices]
+      summary: Rename current player's device
+      operationId: updateDevice
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDeviceRequest'
+      responses:
+        '200':
+          description: Updated device
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Devices]
+      summary: Unlink current player's device
+      operationId: deleteDevice
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '204':
+          description: Device unlinked
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/devices/{id}/status:
+    get:
+      tags: [Devices]
+      summary: Get current player's device status
+      operationId: getDeviceStatus
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200':
+          description: Device status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/pair-codes:
+    post:
+      tags: [Pair Codes]
+      summary: Generate a pairing code for the current player
+      operationId: generatePairCode
+      responses:
+        '200':
+          description: Pairing code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PairCodeResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/pair-codes/active:
+    get:
+      tags: [Pair Codes]
+      summary: Get current active pairing code
+      operationId: getActivePairCode
+      responses:
+        '200':
+          description: Active pairing code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PairCodeStatusResponse'
+        '204':
+          description: No active pairing code
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/pair-codes/{code}/status:
+    get:
+      tags: [Pair Codes]
+      summary: Get pairing code status
+      operationId: getPairCodeStatus
+      parameters:
+        - $ref: '#/components/parameters/PairCode'
+      responses:
+        '200':
+          description: Pairing code status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PairCodeStatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/pair-codes/{code}:
+    delete:
+      tags: [Pair Codes]
+      summary: Cancel a pairing code
+      operationId: cancelPairCode
+      parameters:
+        - $ref: '#/components/parameters/PairCode'
+      responses:
+        '204':
+          description: Pairing code cancelled
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/sessions/current:
+    get:
+      tags: [Sessions]
+      summary: Get current waiting or active session
+      operationId: getCurrentSession
+      responses:
+        '200':
+          description: Current session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '204':
+          description: No current session
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/sessions/me:
+    get:
+      tags: [Sessions]
+      summary: List current player's sessions
+      operationId: getMySessions
+      parameters:
+        - $ref: '#/components/parameters/Limit20'
+      responses:
+        '200':
+          description: Sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SessionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/sessions/{id}:
+    get:
+      tags: [Sessions]
+      summary: Get session details
+      operationId: getSession
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/sessions/{id}/rounds:
+    get:
+      tags: [Sessions]
+      summary: List session rounds
+      operationId: getSessionRounds
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Rounds
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RoundResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/results:
+    post:
+      tags: [Results]
+      summary: Create a result manually
+      description: Game results are also saved automatically when a websocket game finishes.
+      operationId: createResult
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResultCreateRequest'
+      responses:
+        '200':
+          description: Created result id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultCreateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/results/leaders:
+    get:
+      tags: [Results]
+      summary: Get leaderboard
+      operationId: getLeaders
+      parameters:
+        - $ref: '#/components/parameters/Limit10'
+      responses:
+        '200':
+          description: Leaderboard
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LeaderboardEntryResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/results/me:
+    get:
+      tags: [Results]
+      summary: List current player's results
+      operationId: getMyResults
+      parameters:
+        - $ref: '#/components/parameters/Limit20'
+      responses:
+        '200':
+          description: Results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ResultResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/results/me/best:
+    get:
+      tags: [Results]
+      summary: Get current player's best result
+      operationId: getMyBestResult
+      responses:
+        '200':
+          description: Best result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /ws/devices:
+    get:
+      tags: [WebSocket]
+      summary: Device websocket endpoint
+      description: |
+        Connect using websocket, not normal HTTP:
+        `ws://localhost:8080/ws/devices?deviceId={deviceId}&token={deviceToken}`.
+
+        Incoming device messages:
+        - `{"type":"heartbeat"}`
+        - `{"type":"pair_request","code":"123456"}`
+        - `{"type":"round_result","sessionId":"uuid","roundNumber":1,"pressedButton":2,"reactionTimeMs":350,"result":"HIT"}`
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/DeviceIdQuery'
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Plaintext device token returned by `/api/devices/register`.
+      responses:
+        '101':
+          description: Websocket protocol switch
+        '403':
+          description: Handshake rejected
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    DeviceId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      example: device-001
+    DeviceIdQuery:
+      name: deviceId
+      in: query
+      required: true
+      schema:
+        type: string
+      example: device-001
+    PairCode:
+      name: code
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[0-9]+$'
+      example: '123456'
+    SessionId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Limit10:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 10
+        minimum: 1
+        maximum: 100
+    Limit20:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 20
+        minimum: 1
+        maximum: 100
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Missing or invalid JWT token
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Duplicate resource
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [name, password]
+      properties:
+        name:
+          type: string
+          example: player1
+        password:
+          type: string
+          format: password
+          example: secret123
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          example: player1
+        password:
+          type: string
+          format: password
+          example: secret123
+
+    AuthResponse:
+      type: object
+      required: [accessToken, username]
+      properties:
+        accessToken:
+          type: string
+        username:
+          type: string
+          example: player1
+
+    Player:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: player1
+
+    UpdatePlayerRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          example: newName
+
+    PlayerStatsResponse:
+      type: object
+      properties:
+        gamesCount:
+          type: integer
+          format: int64
+        resultsCount:
+          type: integer
+          format: int64
+        bestResultTimeMs:
+          type: integer
+          nullable: true
+        bestReactionMs:
+          type: integer
+          nullable: true
+        avgReactionMs:
+          type: integer
+          nullable: true
+        hitsCount:
+          type: integer
+        missesCount:
+          type: integer
+        wrongButtonsCount:
+          type: integer
+        falseStartsCount:
+          type: integer
+
+    RegisterDeviceRequest:
+      type: object
+      required: [deviceId, name, firmwareVersion]
+      properties:
+        deviceId:
+          type: string
+          example: device-001
+        name:
+          type: string
+          example: Trainer on desk
+        firmwareVersion:
+          type: string
+          example: 1.0.0
+
+    RegisterDeviceResponse:
+      type: object
+      required: [deviceId, name, firmwareVersion, deviceToken]
+      properties:
+        deviceId:
+          type: string
+        name:
+          type: string
+        firmwareVersion:
+          type: string
+        deviceToken:
+          type: string
+          description: Plaintext device token. Store it on the device; backend stores only its hash.
+
+    UpdateDeviceRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          example: Living room trainer
+
+    DeviceResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: device-001
+        name:
+          type: string
+        firmwareVersion:
+          type: string
+        online:
+          type: boolean
+        lastSeenAt:
+          type: string
+          format: date-time
+          nullable: true
+        registeredAt:
+          type: string
+          format: date-time
+
+    PairCodeResponse:
+      type: object
+      required: [code, expiresIn]
+      properties:
+        code:
+          type: string
+          example: '123456'
+        expiresIn:
+          type: integer
+          description: Time to live in seconds.
+          example: 120
+
+    PairCodeStatusResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          example: '123456'
+        used:
+          type: boolean
+        expired:
+          type: boolean
+        deviceId:
+          type: string
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+        usedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    SessionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        deviceId:
+          type: string
+        deviceName:
+          type: string
+          nullable: true
+        status:
+          $ref: '#/components/schemas/SessionStatus'
+        mode:
+          $ref: '#/components/schemas/GameMode'
+        currentRound:
+          type: integer
+        roundsCount:
+          type: integer
+        timeoutMs:
+          type: integer
+        avgReactionMs:
+          type: integer
+          nullable: true
+        bestReactionMs:
+          type: integer
+          nullable: true
+        hitsCount:
+          type: integer
+        missesCount:
+          type: integer
+        wrongButtonsCount:
+          type: integer
+        falseStartsCount:
+          type: integer
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    RoundResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        roundNumber:
+          type: integer
+        targetButton:
+          type: integer
+        stimulusDelayMs:
+          type: integer
+        timeoutMs:
+          type: integer
+        pressedButton:
+          type: integer
+          nullable: true
+        reactionTimeMs:
+          type: integer
+          nullable: true
+        status:
+          $ref: '#/components/schemas/RoundStatus'
+        result:
+          $ref: '#/components/schemas/RoundResult'
+        stimulusAt:
+          type: string
+          format: date-time
+          nullable: true
+        pressedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    ResultCreateRequest:
+      type: object
+      required: [timeMs]
+      properties:
+        playerId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Either playerId or name is required by the backend.
+        name:
+          type: string
+          nullable: true
+          description: Either playerId or name is required by the backend.
+        timeMs:
+          type: integer
+          minimum: 1
+          example: 342
+        deviceId:
+          type: string
+          nullable: true
+
+    ResultCreateResponse:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          format: uuid
+
+    ResultResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        playerId:
+          type: string
+          format: uuid
+        playerName:
+          type: string
+        timeMs:
+          type: integer
+        deviceId:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    LeaderboardEntryResponse:
+      type: object
+      properties:
+        resultId:
+          type: string
+          format: uuid
+        playerId:
+          type: string
+          format: uuid
+        playerName:
+          type: string
+        timeMs:
+          type: integer
+        deviceId:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    SessionStatus:
+      type: string
+      enum: [WAITING, ACTIVE, FINISHED, CANCELLED]
+
+    GameMode:
+      type: string
+      enum: [CLASSIC]
+      description: Only CLASSIC is currently used by the backend.
+
+    RoundStatus:
+      type: string
+      enum: [PLANNED, COMPLETED]
+
+    RoundResult:
+      type: string
+      nullable: true
+      enum: [HIT, MISS, WRONG_BUTTON, FALSE_START]
+
+    ErrorResponse:
+      type: object
+      description: Default Spring error response shape may vary depending on exception handling.
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+        error:
+          type: string
+        message:
+          type: string
+        path:
+          type: string
+
+security:
+  - bearerAuth: []
