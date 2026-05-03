@@ -1,0 +1,9 @@
+services:
+  postgres:
+    image: postgres:latest
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: nifreebie
+      POSTGRES_PASSWORD: nis150905
+      POSTGRES_DB: reaction_trainer_db
