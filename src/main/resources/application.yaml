@@ -1,0 +1,35 @@
+app:
+  jwt:
+    secret: very-very--very--ver-very--very--very--very--very--very--very--very-y-secret-key-which-should-be-long
+    expiration-ms: 86400000
+  pair-code:
+    length: 6
+    ttl-seconds: 120
+    pool-size: 50
+    cleanup-delay-ms: 60000
+    generate-delay-ms: 5000
+    min-count: 20
+  device:
+    heartbeat-timeout-seconds: 20
+    offline-check-delay-ms: 10000
+  game:
+    rounds-count: 10
+    timeout-ms: 1500
+    target-buttons-count: 8
+    stimulus-delay-min-ms: 500
+    stimulus-delay-max-ms: 2000
+
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate.hibernate.dialect: org.hibernate.dialect.PostgreSQLDialect
+  datasource:
+    url: ${POSTGRES_URL:jdbc:postgresql://localhost:5432/reaction_trainer_db}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+  config:
+    import: optional:file:.env
