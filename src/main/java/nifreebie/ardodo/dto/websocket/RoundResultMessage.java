@@ -6,7 +6,6 @@ public record RoundResultMessage(
         String type,
         UUID sessionId,
         int roundNumber,
-        Integer pressedButton,
-        Integer reactionTimeMs,
-        String result
+        Integer enteredAnswer,
+        Integer answerTimeMs
 ) {}

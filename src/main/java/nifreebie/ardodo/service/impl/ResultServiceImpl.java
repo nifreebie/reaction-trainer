@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import nifreebie.ardodo.domain.Player;
 import nifreebie.ardodo.domain.Result;
 import nifreebie.ardodo.dto.request.ResultCreateRequest;
+import nifreebie.ardodo.dto.response.LeaderboardEntryProjection;
 import nifreebie.ardodo.dto.response.LeaderboardEntryResponse;
 import nifreebie.ardodo.dto.response.ResultResponse;
 import nifreebie.ardodo.repository.PlayerRepository;
@@ -44,7 +45,10 @@ public class ResultServiceImpl implements ResultService {
     @Override
     @Transactional(readOnly = true)
     public List<LeaderboardEntryResponse> getLeaders(int limit) {
-        return resultRepository.findLeaders(PageRequest.of(0, normalizeLimit(limit)));
+        return resultRepository.findBestLeaders(PageRequest.of(0, normalizeLimit(limit)))
+                .stream()
+                .map(this::toLeaderboardResponse)
+                .toList();
     }
 
     @Override
@@ -117,6 +121,17 @@ public class ResultServiceImpl implements ResultService {
                 result.getTimeMs(),
                 result.getDeviceId(),
                 result.getCreatedAt()
+        );
+    }
+
+    private LeaderboardEntryResponse toLeaderboardResponse(LeaderboardEntryProjection entry) {
+        return new LeaderboardEntryResponse(
+                entry.getResultId(),
+                entry.getPlayerId(),
+                entry.getPlayerName(),
+                entry.getTimeMs(),
+                entry.getDeviceId(),
+                entry.getCreatedAt()
         );
     }
 }

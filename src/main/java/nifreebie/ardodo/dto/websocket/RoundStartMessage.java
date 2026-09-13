@@ -6,7 +6,7 @@ public record RoundStartMessage(
         String type,
         UUID sessionId,
         int roundNumber,
-        int targetButton,
-        int stimulusDelayMs,
+        int firstNumber,
+        int secondNumber,
         int timeoutMs
 ) {}

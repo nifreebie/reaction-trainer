@@ -79,36 +79,34 @@ public class PlayerServiceImpl implements PlayerService {
                 .map(result -> result.getTimeMs())
                 .orElse(null);
 
-        int hits = sessions.stream().mapToInt(session -> zero(session.getHitsCount())).sum();
-        int misses = sessions.stream().mapToInt(session -> zero(session.getMissesCount())).sum();
-        int wrongButtons = sessions.stream().mapToInt(session -> zero(session.getWrongButtonsCount())).sum();
-        int falseStarts = sessions.stream().mapToInt(session -> zero(session.getFalseStartsCount())).sum();
+        int correctAnswers = sessions.stream().mapToInt(session -> zero(session.getCorrectAnswersCount())).sum();
+        int incorrectAnswers = sessions.stream().mapToInt(session -> zero(session.getIncorrectAnswersCount())).sum();
+        int missedAnswers = sessions.stream().mapToInt(session -> zero(session.getMissedAnswersCount())).sum();
 
-        Integer bestReaction = sessions.stream()
-                .map(session -> session.getBestReactionMs())
+        Integer bestAnswerTime = sessions.stream()
+                .map(session -> session.getBestAnswerTimeMs())
                 .filter(Objects::nonNull)
                 .min(Integer::compareTo)
                 .orElse(null);
 
-        int totalHitsWithReaction = sessions.stream()
-                .filter(session -> session.getTotalReactionMs() != null && session.getHitsCount() != null)
-                .mapToInt(session -> session.getHitsCount())
+        int correctAnswersWithTime = sessions.stream()
+                .filter(session -> session.getTotalAnswerTimeMs() != null && session.getCorrectAnswersCount() != null)
+                .mapToInt(session -> session.getCorrectAnswersCount())
                 .sum();
-        int totalReaction = sessions.stream()
-                .mapToInt(session -> zero(session.getTotalReactionMs()))
+        int totalAnswerTime = sessions.stream()
+                .mapToInt(session -> zero(session.getTotalAnswerTimeMs()))
                 .sum();
-        Integer avgReaction = totalHitsWithReaction == 0 ? null : totalReaction / totalHitsWithReaction;
+        Integer avgAnswerTime = correctAnswersWithTime == 0 ? null : totalAnswerTime / correctAnswersWithTime;
 
         return new PlayerStatsResponse(
                 sessions.size(),
                 resultsCount,
                 bestResultTime,
-                bestReaction,
-                avgReaction,
-                hits,
-                misses,
-                wrongButtons,
-                falseStarts
+                bestAnswerTime,
+                avgAnswerTime,
+                correctAnswers,
+                incorrectAnswers,
+                missedAnswers
         );
     }
 

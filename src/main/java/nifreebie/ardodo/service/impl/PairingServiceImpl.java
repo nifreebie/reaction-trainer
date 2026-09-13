@@ -67,13 +67,13 @@ public class PairingServiceImpl implements PairingService {
         session.setStartedAt(now);
         session.setRoundsCount(gameProperties.getRoundsCount());
         session.setTimeoutMs(gameProperties.getTimeoutMs());
-        session.setFalseStartsCount(0);
-        session.setWrongButtonsCount(0);
-        session.setMissesCount(0);
-        session.setHitsCount(0);
-        session.setTotalReactionMs(0);
-        session.setBestReactionMs(null);
-        session.setAvgReactionMs(null);
+        session.setUnusedLegacyCount(0);
+        session.setIncorrectAnswersCount(0);
+        session.setMissedAnswersCount(0);
+        session.setCorrectAnswersCount(0);
+        session.setTotalAnswerTimeMs(0);
+        session.setBestAnswerTimeMs(null);
+        session.setAvgAnswerTimeMs(null);
         return session;
     }
 

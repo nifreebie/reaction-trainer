@@ -3,7 +3,7 @@ package nifreebie.ardodo.service.impl;
 import lombok.RequiredArgsConstructor;
 import nifreebie.ardodo.config.GameProperties;
 import nifreebie.ardodo.domain.GameSession;
-import nifreebie.ardodo.domain.ReactionRound;
+import nifreebie.ardodo.domain.ArithmeticRound;
 import nifreebie.ardodo.domain.Result;
 import nifreebie.ardodo.domain.RoundResult;
 import nifreebie.ardodo.domain.RoundStatus;
@@ -11,7 +11,7 @@ import nifreebie.ardodo.domain.SessionStatus;
 import nifreebie.ardodo.dto.websocket.GameFinishedMessage;
 import nifreebie.ardodo.dto.websocket.RoundStartMessage;
 import nifreebie.ardodo.repository.GameSessionRepository;
-import nifreebie.ardodo.repository.ReactionRoundRepository;
+import nifreebie.ardodo.repository.ArithmeticRoundRepository;
 import nifreebie.ardodo.repository.ResultRepository;
 import nifreebie.ardodo.service.DeviceMessageSender;
 import nifreebie.ardodo.service.GameFlowService;
@@ -29,7 +29,7 @@ public class GameFlowServiceImpl implements GameFlowService {
     private static final String SESSION_NOT_FOUND = "Session not found";
 
     private final GameSessionRepository gameSessionRepository;
-    private final ReactionRoundRepository reactionRoundRepository;
+    private final ArithmeticRoundRepository arithmeticRoundRepository;
     private final ResultRepository resultRepository;
     private final DeviceMessageSender deviceMessageSender;
     private final GameProperties gameProperties;
@@ -57,28 +57,27 @@ public class GameFlowServiceImpl implements GameFlowService {
             String deviceId,
             UUID sessionId,
             int roundNumber,
-            Integer pressedButton,
-            Integer reactionTimeMs,
-            RoundResult result
+            Integer enteredAnswer,
+            Integer answerTimeMs
     ) {
         GameSession session = findSession(sessionId);
         validateActiveSession(session, deviceId);
 
-        ReactionRound round = findRound(sessionId, roundNumber);
+        ArithmeticRound round = findRound(sessionId, roundNumber);
         if (round.getStatus() == RoundStatus.COMPLETED) {
             return;
         }
 
-        RoundResult normalizedResult = normalizeResult(round, pressedButton, reactionTimeMs, result);
+        RoundResult normalizedResult = determineResult(round, enteredAnswer, answerTimeMs);
 
-        round.setPressedButton(pressedButton);
-        round.setPressedAt(LocalDateTime.now());
-        round.setReactionTimeMs(reactionTimeMs);
+        round.setEnteredAnswer(enteredAnswer);
+        round.setAnsweredAt(LocalDateTime.now());
+        round.setAnswerTimeMs(answerTimeMs);
         round.setResult(normalizedResult);
         round.setStatus(RoundStatus.COMPLETED);
-        reactionRoundRepository.save(round);
+        arithmeticRoundRepository.save(round);
 
-        updateSessionStats(session, reactionTimeMs, normalizedResult);
+        updateSessionStats(session, answerTimeMs, normalizedResult);
 
         if (roundNumber >= session.getRoundsCount()) {
             finishGame(session);
@@ -94,8 +93,8 @@ public class GameFlowServiceImpl implements GameFlowService {
                 .orElseThrow(() -> new IllegalArgumentException(SESSION_NOT_FOUND));
     }
 
-    private ReactionRound findRound(UUID sessionId, int roundNumber) {
-        return reactionRoundRepository.findBySessionIdAndRoundNumber(sessionId, roundNumber)
+    private ArithmeticRound findRound(UUID sessionId, int roundNumber) {
+        return arithmeticRoundRepository.findBySessionIdAndRoundNumber(sessionId, roundNumber)
                 .orElseThrow(() -> new IllegalArgumentException("Round not found"));
     }
 
@@ -106,6 +105,11 @@ public class GameFlowServiceImpl implements GameFlowService {
 
         if (session.getTimeoutMs() == null || session.getTimeoutMs() <= 0) {
             throw new IllegalArgumentException("Invalid timeoutMs");
+        }
+
+        if (gameProperties.getNumberMin() < -99 || gameProperties.getNumberMax() > 99
+                || gameProperties.getNumberMin() > gameProperties.getNumberMax()) {
+            throw new IllegalArgumentException("Number range must be within -99..99");
         }
     }
 
@@ -121,18 +125,19 @@ public class GameFlowServiceImpl implements GameFlowService {
 
     private void sendRoundStart(GameSession session) {
         int roundNumber = session.getCurrentRound();
-        int targetButton = random.nextInt(gameProperties.getTargetButtonsCount()) + 1;
-        int stimulusDelayMs = gameProperties.getStimulusDelayMinMs()
-                + random.nextInt(gameProperties.randomStimulusDelayRange());
+        int firstNumber = randomNumber();
+        int secondNumber = randomNumber();
 
-        ReactionRound round = new ReactionRound();
+        ArithmeticRound round = new ArithmeticRound();
         round.setSession(session);
         round.setRoundNumber(roundNumber);
-        round.setTargetButton(targetButton);
-        round.setStimulusDelayMs(stimulusDelayMs);
+        round.setFirstNumber(firstNumber);
+        round.setSecondNumber(secondNumber);
+        round.setCorrectAnswer(firstNumber + secondNumber);
+        round.setShownAt(LocalDateTime.now());
         round.setTimeoutMs(session.getTimeoutMs());
         round.setStatus(RoundStatus.PLANNED);
-        reactionRoundRepository.save(round);
+        arithmeticRoundRepository.save(round);
 
         deviceMessageSender.sendToDevice(
                 session.getDevice().getId(),
@@ -140,8 +145,8 @@ public class GameFlowServiceImpl implements GameFlowService {
                         "round_start",
                         session.getId(),
                         roundNumber,
-                        targetButton,
-                        stimulusDelayMs,
+                        firstNumber,
+                        secondNumber,
                         session.getTimeoutMs()
                 )
         );
@@ -157,67 +162,62 @@ public class GameFlowServiceImpl implements GameFlowService {
                 new GameFinishedMessage(
                         "game_finished",
                         session.getId(),
-                        zero(session.getAvgReactionMs()),
-                        zero(session.getBestReactionMs()),
-                        zero(session.getMissesCount()),
-                        zero(session.getWrongButtonsCount()),
-                        zero(session.getFalseStartsCount())
+                        zero(session.getAvgAnswerTimeMs()),
+                        zero(session.getBestAnswerTimeMs()),
+                        zero(session.getCorrectAnswersCount()),
+                        zero(session.getIncorrectAnswersCount()),
+                        zero(session.getMissedAnswersCount())
                 )
         );
     }
 
     private void saveResult(GameSession session) {
-        if (session.getBestReactionMs() == null) {
+        if (session.getBestAnswerTimeMs() == null) {
             return;
         }
 
         Result result = new Result();
         result.setPlayer(session.getPlayer());
         result.setDeviceId(session.getDevice().getId());
-        result.setTimeMs(session.getBestReactionMs());
+        result.setTimeMs(session.getBestAnswerTimeMs());
         resultRepository.save(result);
     }
 
-    private void updateSessionStats(GameSession session, Integer reactionTimeMs, RoundResult result) {
+    private void updateSessionStats(GameSession session, Integer answerTimeMs, RoundResult result) {
         switch (result) {
-            case FALSE_START -> session.setFalseStartsCount(zero(session.getFalseStartsCount()) + 1);
-            case WRONG_BUTTON -> session.setWrongButtonsCount(zero(session.getWrongButtonsCount()) + 1);
-            case MISS -> session.setMissesCount(zero(session.getMissesCount()) + 1);
-            case HIT -> {
-                session.setHitsCount(zero(session.getHitsCount()) + 1);
+            case INCORRECT -> session.setIncorrectAnswersCount(zero(session.getIncorrectAnswersCount()) + 1);
+            case MISS -> session.setMissedAnswersCount(zero(session.getMissedAnswersCount()) + 1);
+            case CORRECT -> {
+                session.setCorrectAnswersCount(zero(session.getCorrectAnswersCount()) + 1);
 
-                if (reactionTimeMs != null) {
-                    int totalReaction = zero(session.getTotalReactionMs()) + reactionTimeMs;
-                    session.setTotalReactionMs(totalReaction);
-                    session.setAvgReactionMs(totalReaction / session.getHitsCount());
+                if (answerTimeMs != null) {
+                    int totalAnswerTime = zero(session.getTotalAnswerTimeMs()) + answerTimeMs;
+                    session.setTotalAnswerTimeMs(totalAnswerTime);
+                    session.setAvgAnswerTimeMs(totalAnswerTime / session.getCorrectAnswersCount());
 
-                    if (session.getBestReactionMs() == null || reactionTimeMs < session.getBestReactionMs()) {
-                        session.setBestReactionMs(reactionTimeMs);
+                    if (session.getBestAnswerTimeMs() == null || answerTimeMs < session.getBestAnswerTimeMs()) {
+                        session.setBestAnswerTimeMs(answerTimeMs);
                     }
                 }
             }
         }
     }
 
-    private RoundResult normalizeResult(
-            ReactionRound round,
-            Integer pressedButton,
-            Integer reactionTimeMs,
-            RoundResult reportedResult
-    ) {
-        if (reportedResult == RoundResult.FALSE_START) {
-            return RoundResult.FALSE_START;
-        }
-
-        if (pressedButton == null || reactionTimeMs == null || reactionTimeMs > round.getTimeoutMs()) {
+    private RoundResult determineResult(ArithmeticRound round, Integer enteredAnswer, Integer answerTimeMs) {
+        if (enteredAnswer == null || answerTimeMs == null || answerTimeMs < 0
+                || answerTimeMs > round.getTimeoutMs()) {
             return RoundResult.MISS;
         }
 
-        if (!pressedButton.equals(round.getTargetButton())) {
-            return RoundResult.WRONG_BUTTON;
+        if (!enteredAnswer.equals(round.getCorrectAnswer())) {
+            return RoundResult.INCORRECT;
         }
 
-        return RoundResult.HIT;
+        return RoundResult.CORRECT;
+    }
+
+    private int randomNumber() {
+        return gameProperties.getNumberMin() + random.nextInt(gameProperties.randomNumberRange());
     }
 
     private int zero(Integer value) {

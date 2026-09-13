@@ -1,6 +1,6 @@
-# Reaction Trainer
+# Arithmetic Trainer
 
-Тренажер реакции на базе аппаратной платы NodeMCU ESP8266 и Spring Boot backend. Плата подключается к backend по WebSocket, игрок работает с REST API: регистрируется, получает JWT, создает код сопряжения, вводит код на устройстве и проходит игру из нескольких раундов.
+Арифметический тренажер на базе аппаратной платы NodeMCU ESP8266 и Spring Boot backend. Плата показывает два числа от `-99` до `99`, а игрок вводит их сумму на клавиатуре. Backend фиксирует правильность и время решения десяти примеров.
 
 ## Что есть в проекте
 
@@ -29,10 +29,9 @@
 
 Используемые модули:
 
-- клавиатура 4x3 для ввода 6-значного кода сопряжения;
+- клавиатура 4x3 для ввода кода сопряжения и ответов;
 - PCF8574 I2C expander для клавиатуры;
 - TM1638-подобная панель с 8 кнопками, LED и 7-сегментным дисплеем;
-- buzzer для звуковых сигналов.
 
 Пины из прошивки:
 
@@ -40,7 +39,6 @@
 | --- | --- | --- |
 | I2C SDA | `D2` | GPIO4 |
 | I2C SCL | `D3` | GPIO0 |
-| Buzzer | `D1` | GPIO5 |
 | TM STB | `D5` | GPIO14 |
 | TM CLK | `D6` | GPIO12 |
 | TM DIO | `D7` | GPIO13 |
@@ -56,7 +54,7 @@
 * 0 #
 ```
 
-`*` очищает введенный код, `#` отправляет код на backend.
+При сопряжении `*` очищает введенный код, а `#` отправляет его на backend. Во время игры цифры формируют ответ, короткое нажатие `*` меняет знак, длительное нажатие `*` очищает ответ, а `#` отправляет его.
 
 ## Локальный запуск backend
 
@@ -282,13 +280,12 @@ Backend:
 app:
   game:
     rounds-count: 10
-    timeout-ms: 1500
-    target-buttons-count: 8
-    stimulus-delay-min-ms: 500
-    stimulus-delay-max-ms: 2000
+    timeout-ms: 30000
+    number-min: -99
+    number-max: 99
 ```
 
-Для каждого раунда backend выбирает случайную целевую кнопку от 1 до 8 и случайную задержку стимула.
+Для каждого раунда backend выбирает два случайных числа от `-99` до `99` и сохраняет правильную сумму.
 
 Сообщение на плату:
 
@@ -297,19 +294,19 @@ app:
   "type": "round_start",
   "sessionId": "uuid",
   "roundNumber": 1,
-  "targetButton": 4,
-  "stimulusDelayMs": 1200,
-  "timeoutMs": 1500
+  "firstNumber": -125,
+  "secondNumber": 87,
+  "timeoutMs": 30000
 }
 ```
 
 На плате:
 
 1. после `pair_success` начинается обратный отсчет 10 секунд;
-2. плата показывает номер целевой кнопки;
-3. включает LED целевой кнопки;
-4. ждет нажатия кнопки на игровой панели;
-5. измеряет время реакции от появления стимула.
+2. плата показывает первое число в разрядах 1–4 и второе в разрядах 5–8;
+3. после первой введённой цифры дисплей показывает текущий ответ; длительное нажатие `*` очищает его и снова показывает пример;
+4. игрок нажимает `#`, чтобы отправить сумму;
+5. плата измеряет время от появления примера до отправки ответа.
 
 ### 7. Плата отправляет результат раунда
 
@@ -320,27 +317,20 @@ app:
   "type": "round_result",
   "sessionId": "uuid",
   "roundNumber": 1,
-  "pressedButton": 4,
-  "reactionTimeMs": 312,
-  "result": "HIT"
+  "enteredAnswer": -38,
+  "answerTimeMs": 4312
 }
 ```
 
-Возможные значения `result`:
+Плата не передает признак правильности. Backend самостоятельно сравнивает ответ с суммой и сохраняет один из результатов:
 
 | Result | Когда возникает |
 | --- | --- |
-| `HIT` | нажата правильная кнопка до timeout |
-| `WRONG_BUTTON` | нажата неправильная кнопка |
-| `MISS` | игрок не нажал кнопку до timeout |
-| `FALSE_START` | кнопка нажата до появления стимула |
+| `CORRECT` | введена правильная сумма до timeout |
+| `INCORRECT` | введен неправильный ответ |
+| `MISS` | ответ не отправлен до timeout |
 
-Backend дополнительно нормализует результат:
-
-- если `pressedButton` пустой;
-- если `reactionTimeMs` пустой;
-- если `reactionTimeMs` больше `timeoutMs`;
-- если нажата не та кнопка.
+Пустой ответ, отсутствующее время или превышение `timeoutMs` считаются `MISS`.
 
 После сохранения результата backend либо отправляет следующий `round_start`, либо завершает игру.
 
@@ -352,15 +342,15 @@ Backend дополнительно нормализует результат:
 {
   "type": "game_finished",
   "sessionId": "uuid",
-  "avgReactionMs": 360,
-  "bestReactionMs": 280,
-  "missesCount": 1,
-  "wrongButtonsCount": 0,
-  "falseStartsCount": 0
+  "avgAnswerTimeMs": 5100,
+  "bestAnswerTimeMs": 2800,
+  "correctAnswersCount": 8,
+  "incorrectAnswersCount": 1,
+  "missedAnswersCount": 1
 }
 ```
 
-Плата показывает среднее время реакции, проигрывает финальную мелодию и ждет нажатия любой кнопки, чтобы вернуться к вводу нового pair-code.
+Плата показывает количество правильных ответов и ждет нажатия кнопки, чтобы вернуться к вводу нового pair-code.
 
 ## REST API
 
@@ -410,7 +400,7 @@ ws://localhost:8080/ws/devices?deviceId={deviceId}&token={deviceToken}
 ```
 
 ```json
-{"type":"round_result","sessionId":"uuid","roundNumber":1,"pressedButton":2,"reactionTimeMs":350,"result":"HIT"}
+{"type":"round_result","sessionId":"uuid","roundNumber":1,"enteredAnswer":5,"answerTimeMs":4350}
 ```
 
 Сообщения от backend:
@@ -424,11 +414,11 @@ ws://localhost:8080/ws/devices?deviceId={deviceId}&token={deviceToken}
 ```
 
 ```json
-{"type":"round_start","sessionId":"uuid","roundNumber":1,"targetButton":2,"stimulusDelayMs":800,"timeoutMs":1500}
+{"type":"round_start","sessionId":"uuid","roundNumber":1,"firstNumber":-7,"secondNumber":12,"timeoutMs":30000}
 ```
 
 ```json
-{"type":"game_finished","sessionId":"uuid","avgReactionMs":360,"bestReactionMs":280,"missesCount":1,"wrongButtonsCount":0,"falseStartsCount":0}
+{"type":"game_finished","sessionId":"uuid","avgAnswerTimeMs":5100,"bestAnswerTimeMs":2800,"correctAnswersCount":8,"incorrectAnswersCount":1,"missedAnswersCount":1}
 ```
 
 ```json
@@ -484,10 +474,9 @@ mvn test
 | `app.pair-code.ttl-seconds` | `120` | срок жизни кода |
 | `app.device.heartbeat-timeout-seconds` | `20` | timeout online-статуса устройства |
 | `app.game.rounds-count` | `10` | количество раундов |
-| `app.game.timeout-ms` | `1500` | время на нажатие после стимула |
-| `app.game.target-buttons-count` | `8` | количество игровых кнопок |
-| `app.game.stimulus-delay-min-ms` | `500` | минимальная задержка стимула |
-| `app.game.stimulus-delay-max-ms` | `2000` | максимальная задержка стимула |
+| `app.game.timeout-ms` | `30000` | время на решение одного примера |
+| `app.game.number-min` | `-99` | минимальное число в примере |
+| `app.game.number-max` | `99` | максимальное число в примере |
 
 ## Типичный сценарий разработки
 

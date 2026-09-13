@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import nifreebie.ardodo.domain.RoundResult;
 import nifreebie.ardodo.dto.websocket.PairingResult;
 import nifreebie.ardodo.repository.DeviceRepository;
 import nifreebie.ardodo.service.DeviceSessionRegistry;
@@ -136,9 +135,8 @@ public class DeviceWebSocketHandler extends TextWebSocketHandler {
         try {
             String deviceId = (String) session.getAttributes().get("deviceId");
             String sessionIdRaw = node.path("sessionId").asText(null);
-            String resultRaw = node.path("result").asText(null);
 
-            if (deviceId == null || sessionIdRaw == null || resultRaw == null) {
+            if (deviceId == null || sessionIdRaw == null) {
                 sendError(session, "INVALID_REQUEST");
                 return;
             }
@@ -151,23 +149,20 @@ public class DeviceWebSocketHandler extends TextWebSocketHandler {
                 return;
             }
 
-            Integer pressedButton = node.hasNonNull("pressedButton")
-                    ? node.get("pressedButton").asInt()
+            Integer enteredAnswer = node.hasNonNull("enteredAnswer")
+                    ? node.get("enteredAnswer").asInt()
                     : null;
 
-            Integer reactionTimeMs = node.hasNonNull("reactionTimeMs")
-                    ? node.get("reactionTimeMs").asInt()
+            Integer answerTimeMs = node.hasNonNull("answerTimeMs")
+                    ? node.get("answerTimeMs").asInt()
                     : null;
-
-            RoundResult result = RoundResult.valueOf(resultRaw.toUpperCase());
 
             gameFlowService.handleRoundResult(
                     deviceId,
                     sessionId,
                     roundNumber,
-                    pressedButton,
-                    reactionTimeMs,
-                    result
+                    enteredAnswer,
+                    answerTimeMs
             );
 
         } catch (IllegalArgumentException | IllegalStateException e) {

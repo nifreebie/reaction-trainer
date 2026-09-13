@@ -1,5 +1,5 @@
 /*
-  Ardodo reaction trainer firmware for NodeMCU v3 Lolin / ESP8266.
+  Ardodo arithmetic trainer firmware for NodeMCU v3 Lolin / ESP8266.
 
   Arduino IDE libraries to install:
   - ESP8266 board package
@@ -33,8 +33,6 @@ const char* DEVICE_TOKEN = "PASTE_DEVICE_TOKEN_FROM_BACKEND";
 // NodeMCU pin mapping.
 const uint8_t I2C_SDA_PIN = D2;      // GPIO4
 const uint8_t I2C_SCL_PIN = D3;      // GPIO0
-const uint8_t BUZZER_PIN = D1;       // GPIO5
-
 const uint8_t TM_STB_PIN = D5;       // GPIO14
 const uint8_t TM_CLK_PIN = D6;       // GPIO12
 const uint8_t TM_DIO_PIN = D7;       // GPIO13
@@ -59,8 +57,7 @@ enum GameState {
   COUNTDOWN,
   WAIT_ROUND,
   ROUND_PAUSE,
-  WAIT_STIMULUS,
-  WAIT_PRESS,
+  WAIT_ANSWER,
   GAME_FINISHED
 };
 
@@ -70,19 +67,24 @@ GameState state = ENTER_PAIR_CODE;
 String pairCode;
 String sessionId;
 int currentRound = 0;
-int targetButton = 0;
-int timeoutMs = 1500;
-int stimulusDelayMs = 0;
-unsigned long roundStartAtMs = 0;
-unsigned long stimulusAtMs = 0;
+int firstNumber = 0;
+int secondNumber = 0;
+int timeoutMs = 30000;
+unsigned long problemShownAtMs = 0;
 bool resultSent = false;
 bool roundPending = false;
 unsigned long countdownStartedAtMs = 0;
 int lastCountdownValue = -1;
 unsigned long roundPauseStartedAtMs = 0;
 unsigned long lastHeartbeatAtMs = 0;
+String answerDigits;
+bool answerNegative = false;
+char activeGameKey = 0;
+unsigned long activeGameKeySinceMs = 0;
+bool longPressHandled = false;
 
 const unsigned long HEARTBEAT_INTERVAL_MS = 5000;
+const unsigned long CLEAR_ANSWER_HOLD_MS = 800;
 
 char lastKey = 0;
 unsigned long lastKeyAtMs = 0;
@@ -274,6 +276,30 @@ void tmDisplayPairCode() {
   }
 }
 
+void tmDisplayNumberInRange(int value, uint8_t firstPosition, uint8_t lastPosition) {
+  int number = abs(value);
+  uint8_t position = lastPosition;
+
+  do {
+    tmSetDigit(position, SEG_DIGITS[number % 10]);
+    number /= 10;
+    if (position == firstPosition) {
+      break;
+    }
+    position--;
+  } while (number > 0);
+
+  if (value < 0) {
+    tmSetDigit(position, SEG_DASH);
+  }
+}
+
+void tmDisplayProblem() {
+  tmClear();
+  tmDisplayNumberInRange(firstNumber, 0, 3);
+  tmDisplayNumberInRange(secondNumber, 4, 7);
+}
+
 int readTmButton() {
   tmStart();
   tmWriteByte(0x42);
@@ -296,35 +322,6 @@ int readTmButton() {
   return 0;
 }
 
-void beep(uint16_t durationMs) {
-  digitalWrite(BUZZER_PIN, HIGH);
-  delay(durationMs);
-  digitalWrite(BUZZER_PIN, LOW);
-}
-
-void playHitSound() {
-  tone(BUZZER_PIN, 1200, 70);
-  delay(80);
-  noTone(BUZZER_PIN);
-}
-
-void playMarioFinishMelody() {
-  const uint16_t notes[] = {
-    660, 660, 0, 660, 0, 520, 660, 0, 784, 0, 392
-  };
-  const uint16_t durations[] = {
-    90, 90, 90, 90, 90, 90, 90, 90, 160, 140, 160
-  };
-
-  for (uint8_t i = 0; i < sizeof(notes) / sizeof(notes[0]); i++) {
-    if (notes[i] > 0) {
-      tone(BUZZER_PIN, notes[i], durations[i]);
-    }
-    delay(durations[i] + 25);
-    noTone(BUZZER_PIN);
-  }
-}
-
 void sendPairRequest() {
   StaticJsonDocument<128> doc;
   doc["type"] = "pair_request";
@@ -340,7 +337,7 @@ void sendPairRequest() {
   tmDisplayNumber(0);
 }
 
-void sendRoundResult(const char* result, int pressedButton, int reactionTimeMs) {
+void sendRoundResult(bool hasAnswer, int enteredAnswer, int answerTimeMs) {
   if (resultSent || sessionId.length() == 0) {
     return;
   }
@@ -349,18 +346,17 @@ void sendRoundResult(const char* result, int pressedButton, int reactionTimeMs) 
   doc["type"] = "round_result";
   doc["sessionId"] = sessionId;
   doc["roundNumber"] = currentRound;
-  doc["result"] = result;
 
-  if (pressedButton > 0) {
-    doc["pressedButton"] = pressedButton;
+  if (hasAnswer) {
+    doc["enteredAnswer"] = enteredAnswer;
   } else {
-    doc["pressedButton"] = nullptr;
+    doc["enteredAnswer"] = nullptr;
   }
 
-  if (reactionTimeMs >= 0) {
-    doc["reactionTimeMs"] = reactionTimeMs;
+  if (answerTimeMs >= 0) {
+    doc["answerTimeMs"] = answerTimeMs;
   } else {
-    doc["reactionTimeMs"] = nullptr;
+    doc["answerTimeMs"] = nullptr;
   }
 
   String payload;
@@ -370,7 +366,6 @@ void sendRoundResult(const char* result, int pressedButton, int reactionTimeMs) 
   webSocket.sendTXT(payload);
 
   resultSent = true;
-  tmAllLedsOff();
 }
 
 void sendHeartbeat() {
@@ -389,17 +384,6 @@ void sendHeartbeat() {
   lastHeartbeatAtMs = now;
 }
 
-int keypadButtonNumber(char key) {
-  if (key >= '1' && key <= '8') {
-    return key - '0';
-  }
-  return 0;
-}
-
-int readGameButton() {
-  return readTmButton();
-}
-
 void startCountdown() {
   countdownStartedAtMs = millis();
   lastCountdownValue = -1;
@@ -412,14 +396,14 @@ void startCountdown() {
 void beginCurrentRound() {
   roundPending = false;
   resultSent = false;
-  stimulusAtMs = millis();
-
-  tmClear();
+  answerDigits = "";
+  answerNegative = false;
+  activeGameKey = 0;
+  longPressHandled = false;
+  problemShownAtMs = millis();
   tmAllLedsOff();
-  tmDisplayNumber(targetButton);
-  tmSetLed(targetButton, true);
-
-  state = WAIT_PRESS;
+  tmDisplayProblem();
+  state = WAIT_ANSWER;
 }
 
 void startRoundPause() {
@@ -430,11 +414,6 @@ void startRoundPause() {
 }
 
 void handleRoundPause() {
-  if (readTmButton() > 0) {
-    roundPauseStartedAtMs = millis();
-    return;
-  }
-
   if (millis() - roundPauseStartedAtMs >= 1000) {
     beginCurrentRound();
   }
@@ -465,13 +444,16 @@ void resetForNextPairing() {
   pairCode = "";
   sessionId = "";
   currentRound = 0;
-  targetButton = 0;
-  stimulusDelayMs = 0;
-  stimulusAtMs = 0;
-  roundStartAtMs = 0;
+  firstNumber = 0;
+  secondNumber = 0;
+  problemShownAtMs = 0;
   resultSent = false;
   roundPending = false;
   lastCountdownValue = -1;
+  answerDigits = "";
+  answerNegative = false;
+  activeGameKey = 0;
+  longPressHandled = false;
 
   tmClear();
   tmAllLedsOff();
@@ -511,66 +493,83 @@ void handlePairCodeInput() {
   }
 }
 
-void handleGameLoop() {
-  int pressedButton = readGameButton();
-  unsigned long now = millis();
+int enteredAnswerValue() {
+  int value = answerDigits.toInt();
+  return answerNegative ? -value : value;
+}
 
-  if (state == WAIT_STIMULUS) {
-    if (pressedButton > 0) {
-      sendRoundResult("FALSE_START", pressedButton, -1);
+void logEnteredAnswer() {
+  Serial.print("Entered answer: ");
+  if (answerDigits.length() == 0) {
+    Serial.println("<empty>");
+  } else {
+    Serial.println(enteredAnswerValue());
+  }
+}
+
+void handleAnswerInput() {
+  unsigned long now = millis();
+  char key = readKeypad();
+
+  if (key == 0) {
+    if (activeGameKey == '*' && !longPressHandled) {
+      answerNegative = !answerNegative;
+      if (answerDigits.length() > 0) {
+        tmDisplayNumber(enteredAnswerValue());
+      }
+      logEnteredAnswer();
+    }
+    activeGameKey = 0;
+    longPressHandled = false;
+  } else if (key != activeGameKey) {
+    activeGameKey = key;
+    activeGameKeySinceMs = now;
+    longPressHandled = false;
+
+    if (key >= '0' && key <= '9' && answerDigits.length() < 4) {
+      answerDigits += key;
+      tmDisplayNumber(enteredAnswerValue());
+      logEnteredAnswer();
+    } else if (key == '#' && answerDigits.length() > 0) {
+      int answer = enteredAnswerValue();
+      int answerTimeMs = (int)(now - problemShownAtMs);
+      sendRoundResult(true, answer, answerTimeMs);
       state = WAIT_ROUND;
-      beep(250);
+
       return;
     }
-
-    if (now - roundStartAtMs >= (unsigned long)stimulusDelayMs) {
-      stimulusAtMs = now;
-      tmAllLedsOff();
-      tmSetLed(targetButton, true);
-      tmDisplayNumber(targetButton);
-      state = WAIT_PRESS;
-      beep(40);
-    }
-    return;
+  } else if (key == '*' && !longPressHandled
+             && now - activeGameKeySinceMs >= CLEAR_ANSWER_HOLD_MS) {
+    answerDigits = "";
+    answerNegative = false;
+    longPressHandled = true;
+    tmDisplayProblem();
+    Serial.println("Entered answer cleared");
   }
 
-  if (state == WAIT_PRESS) {
-    if (pressedButton > 0) {
-      int reactionTimeMs = (int)(now - stimulusAtMs);
-      const char* result = pressedButton == targetButton ? "HIT" : "WRONG_BUTTON";
-      sendRoundResult(result, pressedButton, reactionTimeMs);
-      state = WAIT_ROUND;
-      if (pressedButton == targetButton) {
-        playHitSound();
-      }
-      return;
-    }
-
-    if (now - stimulusAtMs >= (unsigned long)timeoutMs) {
-      sendRoundResult("MISS", -1, -1);
-      state = WAIT_ROUND;
-    }
+  if (now - problemShownAtMs >= (unsigned long)timeoutMs) {
+    sendRoundResult(false, 0, timeoutMs);
+    state = WAIT_ROUND;
+    return;
   }
 }
 
 void onRoundStart(JsonDocument& doc) {
   sessionId = doc["sessionId"].as<String>();
   currentRound = doc["roundNumber"] | 0;
-  targetButton = doc["targetButton"] | 0;
-  stimulusDelayMs = doc["stimulusDelayMs"] | 1000;
-  timeoutMs = doc["timeoutMs"] | 1500;
+  firstNumber = doc["firstNumber"] | 0;
+  secondNumber = doc["secondNumber"] | 0;
+  timeoutMs = doc["timeoutMs"] | 30000;
 
   Serial.print("Round ");
   Serial.print(currentRound);
-  Serial.print(", target=");
-  Serial.print(targetButton);
-  Serial.print(", delay=");
-  Serial.print(stimulusDelayMs);
+  Serial.print(": ");
+  Serial.print(firstNumber);
+  Serial.print(" + ");
+  Serial.print(secondNumber);
   Serial.print(", timeout=");
   Serial.println(timeoutMs);
 
-  roundStartAtMs = millis();
-  stimulusAtMs = 0;
   roundPending = true;
 
   if (state != COUNTDOWN) {
@@ -618,8 +617,7 @@ void handleWsText(uint8_t* payload, size_t length) {
     Serial.println("Game finished");
     state = GAME_FINISHED;
     tmAllLedsOff();
-    tmDisplayNumber(doc["avgReactionMs"] | 0);
-    playMarioFinishMelody();
+    tmDisplayNumber(doc["correctAnswersCount"] | 0);
     return;
   }
 
@@ -686,9 +684,6 @@ void setup() {
   Serial.println();
   Serial.println("Ardodo firmware boot");
 
-  pinMode(BUZZER_PIN, OUTPUT);
-  digitalWrite(BUZZER_PIN, LOW);
-
   pinMode(TM_STB_PIN, OUTPUT);
   pinMode(TM_CLK_PIN, OUTPUT);
   pinMode(TM_DIO_PIN, OUTPUT);
@@ -716,8 +711,8 @@ void loop() {
     handleCountdown();
   } else if (state == ROUND_PAUSE) {
     handleRoundPause();
-  } else if (state == WAIT_STIMULUS || state == WAIT_PRESS) {
-    handleGameLoop();
+  } else if (state == WAIT_ANSWER) {
+    handleAnswerInput();
   } else if (state == GAME_FINISHED) {
     handleGameFinishedInput();
   }

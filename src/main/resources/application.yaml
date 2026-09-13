@@ -14,10 +14,9 @@ app:
     offline-check-delay-ms: 10000
   game:
     rounds-count: 10
-    timeout-ms: 1500
-    target-buttons-count: 8
-    stimulus-delay-min-ms: 500
-    stimulus-delay-max-ms: 2000
+    timeout-ms: 30000
+    number-min: -99
+    number-max: 99
 
 
 spring:
@@ -33,3 +32,9 @@ spring:
     password: ${POSTGRES_PASSWORD}
   config:
     import: optional:file:.env
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui
+    url: /openapi.yaml
+    disable-swagger-default-url: true

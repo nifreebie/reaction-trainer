@@ -2,12 +2,12 @@ package nifreebie.ardodo.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import nifreebie.ardodo.domain.GameSession;
-import nifreebie.ardodo.domain.ReactionRound;
+import nifreebie.ardodo.domain.ArithmeticRound;
 import nifreebie.ardodo.domain.SessionStatus;
 import nifreebie.ardodo.dto.response.RoundResponse;
 import nifreebie.ardodo.dto.response.SessionResponse;
 import nifreebie.ardodo.repository.GameSessionRepository;
-import nifreebie.ardodo.repository.ReactionRoundRepository;
+import nifreebie.ardodo.repository.ArithmeticRoundRepository;
 import nifreebie.ardodo.service.GameSessionService;
 import nifreebie.ardodo.util.NotFoundException;
 import org.springframework.data.domain.PageRequest;
@@ -27,7 +27,7 @@ public class GameSessionServiceImpl implements GameSessionService {
     private static final List<SessionStatus> CURRENT_STATUSES = List.of(SessionStatus.WAITING, SessionStatus.ACTIVE);
 
     private final GameSessionRepository gameSessionRepository;
-    private final ReactionRoundRepository reactionRoundRepository;
+    private final ArithmeticRoundRepository arithmeticRoundRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -55,7 +55,7 @@ public class GameSessionServiceImpl implements GameSessionService {
     @Transactional(readOnly = true)
     public List<RoundResponse> getSessionRounds(UUID playerId, UUID sessionId) {
         findPlayerSession(playerId, sessionId);
-        return reactionRoundRepository.findBySessionIdOrderByRoundNumberAsc(sessionId)
+        return arithmeticRoundRepository.findBySessionIdOrderByRoundNumberAsc(sessionId)
                 .stream()
                 .map(this::toRoundResponse)
                 .toList();
@@ -84,30 +84,30 @@ public class GameSessionServiceImpl implements GameSessionService {
                 session.getCurrentRound(),
                 session.getRoundsCount(),
                 session.getTimeoutMs(),
-                session.getAvgReactionMs(),
-                session.getBestReactionMs(),
-                session.getHitsCount(),
-                session.getMissesCount(),
-                session.getWrongButtonsCount(),
-                session.getFalseStartsCount(),
+                session.getAvgAnswerTimeMs(),
+                session.getBestAnswerTimeMs(),
+                session.getCorrectAnswersCount(),
+                session.getIncorrectAnswersCount(),
+                session.getMissedAnswersCount(),
                 session.getStartedAt(),
                 session.getEndedAt()
         );
     }
 
-    private RoundResponse toRoundResponse(ReactionRound round) {
+    private RoundResponse toRoundResponse(ArithmeticRound round) {
         return new RoundResponse(
                 round.getId(),
                 round.getRoundNumber(),
-                round.getTargetButton(),
-                round.getStimulusDelayMs(),
+                round.getFirstNumber(),
+                round.getSecondNumber(),
+                round.getCorrectAnswer(),
                 round.getTimeoutMs(),
-                round.getPressedButton(),
-                round.getReactionTimeMs(),
+                round.getEnteredAnswer(),
+                round.getAnswerTimeMs(),
                 round.getStatus(),
                 round.getResult(),
-                round.getStimulusAt(),
-                round.getPressedAt()
+                round.getShownAt(),
+                round.getAnsweredAt()
         );
     }
 }

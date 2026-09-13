@@ -5,9 +5,9 @@ import java.util.UUID;
 public record GameFinishedMessage(
         String type,
         UUID sessionId,
-        int avgReactionMs,
-        int bestReactionMs,
-        int missesCount,
-        int wrongButtonsCount,
-        int falseStartsCount
+        int avgAnswerTimeMs,
+        int bestAnswerTimeMs,
+        int correctAnswersCount,
+        int incorrectAnswersCount,
+        int missedAnswersCount
 ) {}

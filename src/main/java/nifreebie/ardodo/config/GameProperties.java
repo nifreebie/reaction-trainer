@@ -8,10 +8,9 @@ import org.springframework.stereotype.Component;
 public class GameProperties {
 
     private int roundsCount = 10;
-    private int timeoutMs = 1500;
-    private int targetButtonsCount = 8;
-    private int stimulusDelayMinMs = 500;
-    private int stimulusDelayMaxMs = 2000;
+    private int timeoutMs = 30000;
+    private int numberMin = -99;
+    private int numberMax = 99;
 
     public int getRoundsCount() {
         return roundsCount;
@@ -29,31 +28,23 @@ public class GameProperties {
         this.timeoutMs = timeoutMs;
     }
 
-    public int getTargetButtonsCount() {
-        return targetButtonsCount;
+    public int getNumberMin() {
+        return numberMin;
     }
 
-    public void setTargetButtonsCount(int targetButtonsCount) {
-        this.targetButtonsCount = targetButtonsCount;
+    public void setNumberMin(int numberMin) {
+        this.numberMin = numberMin;
     }
 
-    public int getStimulusDelayMinMs() {
-        return stimulusDelayMinMs;
+    public int getNumberMax() {
+        return numberMax;
     }
 
-    public void setStimulusDelayMinMs(int stimulusDelayMinMs) {
-        this.stimulusDelayMinMs = stimulusDelayMinMs;
+    public void setNumberMax(int numberMax) {
+        this.numberMax = numberMax;
     }
 
-    public int getStimulusDelayMaxMs() {
-        return stimulusDelayMaxMs;
-    }
-
-    public void setStimulusDelayMaxMs(int stimulusDelayMaxMs) {
-        this.stimulusDelayMaxMs = stimulusDelayMaxMs;
-    }
-
-    public int randomStimulusDelayRange() {
-        return stimulusDelayMaxMs - stimulusDelayMinMs + 1;
+    public int randomNumberRange() {
+        return numberMax - numberMin + 1;
     }
 }

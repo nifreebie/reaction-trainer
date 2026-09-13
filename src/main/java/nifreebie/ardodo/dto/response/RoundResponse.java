@@ -9,14 +9,15 @@ import java.util.UUID;
 public record RoundResponse(
         UUID id,
         Integer roundNumber,
-        Integer targetButton,
-        Integer stimulusDelayMs,
+        Integer firstNumber,
+        Integer secondNumber,
+        Integer correctAnswer,
         Integer timeoutMs,
-        Integer pressedButton,
-        Integer reactionTimeMs,
+        Integer enteredAnswer,
+        Integer answerTimeMs,
         RoundStatus status,
         RoundResult result,
-        LocalDateTime stimulusAt,
-        LocalDateTime pressedAt
+        LocalDateTime shownAt,
+        LocalDateTime answeredAt
 ) {
 }

@@ -43,13 +43,13 @@ public class GameSession {
     private Integer roundsCount;
 
     @Column(name = "avg_reaction_ms")
-    private Integer avgReactionMs;
+    private Integer avgAnswerTimeMs;
 
     @Column(name = "best_reaction_ms")
-    private Integer bestReactionMs;
+    private Integer bestAnswerTimeMs;
 
     @Column(name = "false_starts_count")
-    private Integer falseStartsCount;
+    private Integer unusedLegacyCount;
 
     @Column(name = "current_round", nullable = false)
     private Integer currentRound = 1;
@@ -61,19 +61,19 @@ public class GameSession {
     private Long gameSeed;
 
     @Column(name = "hits_count")
-    private Integer hitsCount;
+    private Integer correctAnswersCount;
 
     @Column(name = "misses_count")
-    private Integer missesCount;
+    private Integer missedAnswersCount;
 
     @Column(name = "wrong_buttons_count")
-    private Integer wrongButtonsCount;
+    private Integer incorrectAnswersCount;
 
     @Column(name = "total_reaction_ms")
-    private Integer totalReactionMs;
+    private Integer totalAnswerTimeMs;
 
     @OneToMany(mappedBy = "session", cascade = CascadeType.ALL)
-    private List<ReactionRound> rounds;
+    private List<ArithmeticRound> rounds;
 
     @PrePersist
     public void prePersist() {

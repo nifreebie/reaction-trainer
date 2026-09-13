@@ -4,11 +4,10 @@ public record PlayerStatsResponse(
         long gamesCount,
         long resultsCount,
         Integer bestResultTimeMs,
-        Integer bestReactionMs,
-        Integer avgReactionMs,
-        int hitsCount,
-        int missesCount,
-        int wrongButtonsCount,
-        int falseStartsCount
+        Integer bestAnswerTimeMs,
+        Integer avgAnswerTimeMs,
+        int correctAnswersCount,
+        int incorrectAnswersCount,
+        int missedAnswersCount
 ) {
 }

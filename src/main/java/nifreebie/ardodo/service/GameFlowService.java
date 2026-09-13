@@ -1,7 +1,5 @@
 package nifreebie.ardodo.service;
 
-import nifreebie.ardodo.domain.RoundResult;
-
 import java.util.UUID;
 
 public interface GameFlowService {
@@ -11,8 +9,7 @@ public interface GameFlowService {
             String deviceId,
             UUID sessionId,
             int roundNumber,
-            Integer pressedButton,
-            Integer reactionTimeMs,
-            RoundResult result
+            Integer enteredAnswer,
+            Integer answerTimeMs
     );
 }

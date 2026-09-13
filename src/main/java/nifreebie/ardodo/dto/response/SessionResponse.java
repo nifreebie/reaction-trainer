@@ -15,12 +15,11 @@ public record SessionResponse(
         Integer currentRound,
         Integer roundsCount,
         Integer timeoutMs,
-        Integer avgReactionMs,
-        Integer bestReactionMs,
-        Integer hitsCount,
-        Integer missesCount,
-        Integer wrongButtonsCount,
-        Integer falseStartsCount,
+        Integer avgAnswerTimeMs,
+        Integer bestAnswerTimeMs,
+        Integer correctAnswersCount,
+        Integer incorrectAnswersCount,
+        Integer missedAnswersCount,
         LocalDateTime startedAt,
         LocalDateTime endedAt
 ) {
